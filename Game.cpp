@@ -77,11 +77,17 @@ void Game::run()
 	while (m_running)
 	{
 		m_entities.update();
+		
+		if (!(m_player->isActive()))
+		{
+			spawnPlayer();
+		}
 
 		sEnemySpawner();
 		sMovement();
 		sCollision();
 		sUserInput();
+		sLifeSpan();
 		sRender();
 		
 		//increment the current frame 
@@ -165,6 +171,9 @@ void Game::spawnEnemy()
 	//The entity's origin should be located at the centre of the shape.
 	entity->cShape->circle.setOrigin(entity->cShape->circle.getRadius(), entity->cShape->circle.getRadius());
 
+	//Give this entity a score
+	entity->cScore = std::make_shared<CScore>(static_cast<int>(vertice) * 100);
+
 
 	//record when the most recent enemy was spawned
 	m_lastEnemySpawnTime = m_currentFrame;
@@ -196,16 +205,19 @@ void Game::spawnBullet(std::shared_ptr<Entity> entity, const Vec2& mousePos)
 	Vec2 diff{ (mousePos.x - entity->cTransform->pos.x) , (mousePos.y - entity->cTransform->pos.y) };
 	Vec2 velocity{ (m_bulletConfig.S * diff.norm().x) , (m_bulletConfig.S * diff.norm().y) };
 
-	///Give the entity a transform to spawn at entity's position with a calculated velocity and angle 0
+	//Give the entity a transform to spawn at entity's position with a calculated velocity and angle 0
 	e->cTransform = std::make_shared<CTransform>(entity->cTransform->pos, velocity, 0.0f);
 
-	//Construction of the entity shape with configurations
+	//Construction of the entity shape from configurations
 	e->cShape = std::make_shared<CShape>(static_cast<float>(m_bulletConfig.SR), static_cast<size_t>(m_bulletConfig.V),
 		sf::Color(m_bulletConfig.FR, m_bulletConfig.FG, m_bulletConfig.FB), sf::Color(m_bulletConfig.OR, m_bulletConfig.OG, m_bulletConfig.OB),
 		static_cast<float>(m_bulletConfig.OT));
 
 	//The entity's origin should be located at the centre of the shape.
 	e->cShape->circle.setOrigin(e->cShape->circle.getRadius(), e->cShape->circle.getRadius());
+
+	//Give this entity a lifespan with configuration
+	e->cLifespan = std::make_shared<CLifespan>(m_bulletConfig.L);
 
 }
 
@@ -266,12 +278,60 @@ void Game::sLifeSpan()
 	//			scale its alpha channel properly
 	//		if it has lifespan and its time is up
 	//			destroy the entity
+
+	for (auto& e : m_entities.getEntities())
+	{
+		if (!(e->cLifespan))
+		{
+			continue;
+		}
+		else if ((e->cLifespan->remaining) > 0) 
+		{
+			if (e->isActive())
+			{
+				e->cLifespan->remaining -= 1;
+				sf::Uint8 alpha = static_cast<int>(((e->cLifespan->remaining * 1.0f) / (e->cLifespan->total)) * 255);
+				sf::Color color{ e->cShape->circle.getFillColor().r,e->cShape->circle.getFillColor().g,e->cShape->circle.getFillColor().b, alpha };
+				e->cShape->circle.setFillColor(color);
+			}
+		}
+		else
+		{
+			e->destroy();
+		}
+
+	}
 }
 
 void Game::sCollision()
 {
 	//TODO: implement all proper collisions between entities
 	// be sure to use the collision radius, NOT the shape radius
+
+
+	//Collision between bullet and enemy
+	for (auto& b : m_entities.getEntities("bullet"))
+	{
+		for (auto& e : m_entities.getEntities("enemy"))
+		{
+			if ((b->cTransform->pos.dist(e->cTransform->pos)) <= (m_enemyConfig.CR + m_bulletConfig.CR))
+			{
+				m_score += e->cScore->score;
+				b->destroy();
+				e->destroy();
+			}
+		}
+	}
+
+	//Collision between enemy and player
+	for (auto& e : m_entities.getEntities("enemy"))
+	{
+		if ((m_player->cTransform->pos.dist(e->cTransform->pos)) <= (m_playerConfig.CR + m_enemyConfig.CR))
+		{
+			e->destroy();
+			m_player->destroy();
+		}
+	}
 
 	//Window bouncing
 	for (auto& e : m_entities.getEntities())
@@ -334,6 +394,18 @@ void Game::sEnemySpawner()
 
 void Game::sRender()
 {
+	//Initialize a font for text
+	std::filesystem::path fontPath{ "C:\\Users\\mailt\\OneDrive\\Resimler\\COMP4300\\Assignment2\\tech.ttf" };
+	m_font.loadFromFile(fontPath.string());
+
+	//Initialize a text for score
+	std::string scoreValue = std::to_string(m_score);
+	std::string score = "Score: " + scoreValue;
+	m_text.setString(score);
+	m_text.setFont(m_font);
+	m_text.setFillColor(sf::Color(m_fontConfig.R, m_fontConfig.G, m_fontConfig.B));
+	m_text.setPosition(0.0f,0.0f);
+
 	//TODO: change the code below to draw ALL of the entities
 	// 
 	m_window.clear();
@@ -350,6 +422,8 @@ void Game::sRender()
 		//draw the entity's sf::CircleShape
 		m_window.draw(e->cShape->circle);
 	}
+
+	m_window.draw(m_text);
 
 	m_window.display();
 }

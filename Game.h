@@ -6,7 +6,7 @@
 #include <SFML/Graphics.hpp>
 
 struct WindowConfig { unsigned int W, H, FL; bool FS; };
-struct FontConfig { std::string F; int S; int R, G, B; };
+struct FontConfig { std::string F{}; int S{}; int R{}; int G{}; int B{}; };
 struct PlayerConfig { int SR, CR, FR, FG, FB, OR, OG, OB, OT, V; float S; };
 struct EnemyConfig { int SR, CR, OR, OG, OB, OT, VMIN, VMAX, L, SI; float SMIN, SMAX; };
 struct BulletConfig { int SR, CR, FR, FG, FB, OR, OG, OB, OT, V, L; float S; };
