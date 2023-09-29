@@ -83,7 +83,7 @@ void Game::run()
 		sCollision();
 		sUserInput();
 		sRender();
-
+		
 		//increment the current frame 
 		//may need to be moved when pause implemented
 		m_currentFrame++;
@@ -134,14 +134,22 @@ void Game::spawnEnemy()
 	auto entity = m_entities.addEntity("enemy");
 
 	//Generates a random position within the boundaries of the window, avoiding any issues with spawning outside of the window
-	float posX = Random::get(0.0f + m_enemyConfig.SR, m_window.getSize().x - m_enemyConfig.SR + 0.0f);
-	float posY = Random::get(0.0f + m_enemyConfig.SR, m_window.getSize().y - m_enemyConfig.SR + 0.0f);
+	float posX = Random::get(0.0f + m_enemyConfig.SR, m_window.getSize().x - m_enemyConfig.SR * 1.0f);
+	float posY = Random::get(0.0f + m_enemyConfig.SR, m_window.getSize().y - m_enemyConfig.SR * 1.0f);
 
-	//Generetes a random speed within the minimum and maximum values specified in the configuration file(SMIN,SMAX)
+	//Generates a random speed within the minimum and maximum values specified in the configuration file(SMIN,SMAX)
 	float speed = Random::get(m_enemyConfig.SMIN, m_enemyConfig.SMAX);
 
+	//Generates a random position within the boundaries of the window
+	float randX = Random::get(0.0f, m_window.getSize().x * 1.0f);
+	float randY = Random::get(0.0f, m_window.getSize().y * 1.0f);
+
+	//Generates a random velocity
+	Vec2 diff{ (randX - posX) , (randY - posY) };
+	Vec2 velocity{ (speed * diff.norm().x) , (speed * diff.norm().y) };
+
 	//Give this entity a Transform so it spawns at a random position within the window boundaries with velocity of random speed and angle 0
-	entity->cTransform = std::make_shared<CTransform>(Vec2(posX, posY), Vec2(speed, speed), 0.0f);
+	entity->cTransform = std::make_shared<CTransform>(Vec2(posX, posY), velocity, 0.0f);
 
 	//Generates a random color
 	sf::Uint8 colorR = Random::get(0, 255); sf::Uint8 colorG = Random::get(0, 255); sf::Uint8 colorB = Random::get(0, 255);
@@ -180,6 +188,25 @@ void Game::spawnBullet(std::shared_ptr<Entity> entity, const Vec2& mousePos)
 	//TODO: implement the spawning of a bullet which travels toward target
 	// - bullet speed is given as a scalar speed
 	// - you must set the velocity by using formula in notes
+
+	//This returns a std::shared_ptr<Entity>, so we use auto to save typing
+	auto e = m_entities.addEntity("bullet");
+
+	//Velocity calculation
+	Vec2 diff{ (mousePos.x - entity->cTransform->pos.x) , (mousePos.y - entity->cTransform->pos.y) };
+	Vec2 velocity{ (m_bulletConfig.S * diff.norm().x) , (m_bulletConfig.S * diff.norm().y) };
+
+	///Give the entity a transform to spawn at entity's position with a calculated velocity and angle 0
+	e->cTransform = std::make_shared<CTransform>(entity->cTransform->pos, velocity, 0.0f);
+
+	//Construction of the entity shape with configurations
+	e->cShape = std::make_shared<CShape>(static_cast<float>(m_bulletConfig.SR), static_cast<size_t>(m_bulletConfig.V),
+		sf::Color(m_bulletConfig.FR, m_bulletConfig.FG, m_bulletConfig.FB), sf::Color(m_bulletConfig.OR, m_bulletConfig.OG, m_bulletConfig.OB),
+		static_cast<float>(m_bulletConfig.OT));
+
+	//The entity's origin should be located at the centre of the shape.
+	e->cShape->circle.setOrigin(e->cShape->circle.getRadius(), e->cShape->circle.getRadius());
+
 }
 
 void Game::spawnSpecialWeapon(std::shared_ptr<Entity> entity)
@@ -191,10 +218,40 @@ void Game::sMovement()
 {
 	//TODO: implement all entity movement in this function
 	// you should read the m_player->cInput component to determine if the player is moving
+	
+	for (auto& e : m_entities.getEntities())
+	{
+		if (e->tag() == "player")
+		{
+			if (e->cInput->up)
+			{
+				e->cTransform->pos.y -= e->cTransform->velocity.y;
+			}
+			else if (e->cInput->down)
+			{
+				e->cTransform->pos.y += e->cTransform->velocity.y;
+			}
+			else if (e->cInput->left)
+			{
+				e->cTransform->pos.x -= e->cTransform->velocity.x;
+			}
+			else if (e->cInput->right)
+			{
+				e->cTransform->pos.x += e->cTransform->velocity.x;
+			}
+
+		}
+		else 
+		{
+			e->cTransform->pos.x += e->cTransform->velocity.x;
+			e->cTransform->pos.y += e->cTransform->velocity.y;
+		}
+	}
+
 
 	//Sample movement speed update
-	m_player->cTransform->pos.x += m_player->cTransform->velocity.x;
-	m_player->cTransform->pos.y += m_player->cTransform->velocity.y;
+	//m_player->cTransform->pos.x += m_player->cTransform->velocity.x;
+	//m_player->cTransform->pos.y += m_player->cTransform->velocity.y;
 
 }
 
@@ -215,6 +272,51 @@ void Game::sCollision()
 {
 	//TODO: implement all proper collisions between entities
 	// be sure to use the collision radius, NOT the shape radius
+
+	//Window bouncing
+	for (auto& e : m_entities.getEntities())
+	{
+		if (e->tag() == "player")
+		{
+			if (e->cTransform->pos.x - e->cShape->circle.getRadius() < 0)
+			{
+				e->cTransform->pos.x += e->cTransform->velocity.x;
+			}
+			if (e->cTransform->pos.y - e->cShape->circle.getRadius() < 0)
+			{
+				e->cTransform->pos.y += e->cTransform->velocity.y;
+			}
+			if (e->cTransform->pos.x + e->cShape->circle.getRadius() >= m_window.getSize().x)
+			{
+				e->cTransform->pos.x -= e->cTransform->velocity.x;
+			}
+			if (e->cTransform->pos.y + e->cShape->circle.getRadius() >= m_window.getSize().y)
+			{
+				e->cTransform->pos.y -= e->cTransform->velocity.y;
+			}
+		}
+		else if(!(e->tag() == "bullet"))
+		{
+			if (e->cTransform->pos.x - e->cShape->circle.getRadius() < 0)
+			{
+				e->cTransform->velocity.x = e->cTransform->velocity.x * -1.0f;
+			}
+			if (e->cTransform->pos.y - e->cShape->circle.getRadius() < 0)
+			{
+				e->cTransform->velocity.y = e->cTransform->velocity.y * -1.0f;
+			}
+			if (e->cTransform->pos.x + e->cShape->circle.getRadius() >= m_window.getSize().x)
+			{
+				e->cTransform->velocity.x = e->cTransform->velocity.x * -1.0f;
+			}
+			if (e->cTransform->pos.y + e->cShape->circle.getRadius() >= m_window.getSize().y)
+			{
+				e->cTransform->velocity.y = e->cTransform->velocity.y * -1.0f;
+			}
+		}
+	}
+
+
 }
 
 void Game::sEnemySpawner()
@@ -224,7 +326,7 @@ void Game::sEnemySpawner()
 	//		(use m_currentFrame - m_lastEnemySpawnTime) to determine
 	//		how long it has been since the last enemy spawned
 
-	while ((m_currentFrame - m_lastEnemySpawnTime) == m_enemyConfig.SI )
+	if ((m_currentFrame - m_lastEnemySpawnTime) == m_enemyConfig.SI)
 	{
 		spawnEnemy();
 	}
@@ -273,9 +375,18 @@ void Game::sUserInput()
 		{
 			switch (event.key.code)
 			{
+			//TODO: set player's input components to true
 			case sf::Keyboard::W:
-				std::cout << "W Key Pressed\n";
-				//TODO: set player's input component "up" to true
+				m_player->cInput->up = true;
+				break;
+			case sf::Keyboard::A:
+				m_player->cInput->left = true;
+				break;
+			case sf::Keyboard::D:
+				m_player->cInput->right = true;
+				break;
+			case sf::Keyboard::S:
+				m_player->cInput->down = true;
 				break;
 			default: break;
 			}
@@ -286,9 +397,18 @@ void Game::sUserInput()
 		{
 			switch (event.key.code)
 			{
+			//TODO: set player's input components to false
 			case sf::Keyboard::W:
-				std::cout << "W Key Released\n";
-				//TODO: set player's input component "up" to false
+				m_player->cInput->up = false;
+				break;
+			case sf::Keyboard::A:
+				m_player->cInput->left = false;
+				break;
+			case sf::Keyboard::D:
+				m_player->cInput->right = false;
+				break;
+			case sf::Keyboard::S:
+				m_player->cInput->down = false;
 				break;
 			default: break;
 			}
@@ -298,13 +418,12 @@ void Game::sUserInput()
 		{
 			if (event.mouseButton.button == sf::Mouse::Left)
 			{
-				std::cout << "Left Mouse Button Clicked at (" << event.mouseButton.x << ',' << event.mouseButton.y << ")\n";
 				//call spawnBullet here
+				spawnBullet(m_player, Vec2(static_cast<float>(event.mouseButton.x),static_cast<float>(event.mouseButton.y)));
 			}
 
 			if (event.mouseButton.button == sf::Mouse::Right)
 			{
-				std::cout << "Right Mouse Button Clicked at (" << event.mouseButton.x << ',' << event.mouseButton.y << ")\n";
 				//call spawnSpecialWeapon here
 			}
 		}
