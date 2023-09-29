@@ -5,6 +5,8 @@
 
 #include <SFML/Graphics.hpp>
 
+struct WindowConfig { unsigned int W, H, FL; bool FS; };
+struct FontConfig { std::string F; int S; int R, G, B; };
 struct PlayerConfig { int SR, CR, FR, FG, FB, OR, OG, OB, OT, V; float S; };
 struct EnemyConfig { int SR, CR, OR, OG, OB, OT, VMIN, VMAX, L, SI; float SMIN, SMAX; };
 struct BulletConfig { int SR, CR, FR, FG, FB, OR, OG, OB, OT, V, L; float S; };
@@ -14,9 +16,11 @@ class Game
 private:
 
 	sf::RenderWindow	m_window;					//the window we will draw to
-	EntityManager	m_entities;					//vector of entities to maintain
+	EntityManager		m_entities;					//vector of entities to maintain
 	sf::Font			m_font;						//the font we will use to draw
 	sf::Text			m_text;						//the score text to be drawn to the screen
+	WindowConfig		m_windowConfig;
+	FontConfig			m_fontConfig;
 	PlayerConfig		m_playerConfig;
 	EnemyConfig			m_enemyConfig;
 	BulletConfig		m_bulletConfig;
