@@ -66,3 +66,12 @@ public:
 
 	CInput() = default;
 };
+
+class CBounce
+{
+public:
+	int remaining{ 0 }; // amount of bounce remaining on the entity
+	int total{ 0 };		// the total initial amount of window bounce 
+	CBounce(int total)
+		: remaining{ total }, total{ total } {}
+};

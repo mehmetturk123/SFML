@@ -9,16 +9,16 @@ struct WindowConfig { unsigned int W, H, FL; bool FS; };
 struct FontConfig { std::string F{}; int S{}; int R{}; int G{}; int B{}; };
 struct PlayerConfig { int SR, CR, FR, FG, FB, OR, OG, OB, OT, V; float S; };
 struct EnemyConfig { int SR, CR, OR, OG, OB, OT, VMIN, VMAX, L, SI; float SMIN, SMAX; };
-struct BulletConfig { int SR, CR, FR, FG, FB, OR, OG, OB, OT, V, L; float S; };
+struct BulletConfig { int SR, CR, FR, FG, FB, OR, OG, OB, OT, V, L, SI; float S; };
 
 class Game
 {
 private:
 
-	sf::RenderWindow	m_window;					//the window we will draw to
-	EntityManager		m_entities;					//vector of entities to maintain
-	sf::Font			m_font;						//the font we will use to draw
-	sf::Text			m_text;						//the score text to be drawn to the screen
+	sf::RenderWindow	m_window;							//the window we will draw to
+	EntityManager		m_entities;							//vector of entities to maintain
+	sf::Font			m_font;								//the font we will use to draw
+	sf::Text			m_text;								//the score text to be drawn to the screen
 	WindowConfig		m_windowConfig;
 	FontConfig			m_fontConfig;
 	PlayerConfig		m_playerConfig;
@@ -27,8 +27,14 @@ private:
 	int					m_score{ 0 };
 	int					m_currentFrame{ 0 };
 	int					m_lastEnemySpawnTime{ 0 };
-	bool				m_paused{ false };			//whether we update game logic
-	bool				m_running{ true };			//whether the game is running
+	int					m_lastBulletFireTime{ 0 };
+	int					m_lastSpecialFireTime{ 0 };
+	const int			m_specialWeaponSI{ 120 };			//special weapon spawn interval(need to designed by game designer)
+	const int			m_specialTotalBounce{ 3 };			//special weapon total number of bouncing(need to designed by game designer)
+	bool				m_firstTimeBulletFired{ true };
+	bool				m_firstTimeSpecialFired{ true };
+	bool				m_paused{ false };					//whether we update game logic
+	bool				m_running{ true };					//whether the game is running
 
 	std::shared_ptr<Entity> m_player;
 
@@ -41,6 +47,7 @@ private:
 	void sRender();			//System: Render /  Drawing
 	void sEnemySpawner();	//System: Spawns Enemies 
 	void sCollision();		//System: Collisions
+	void sSpecialWeapon();	//System: Special Weapon
 
 	void spawnPlayer();
 	void spawnEnemy();

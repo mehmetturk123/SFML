@@ -48,7 +48,7 @@ void Game::init(const std::string& config)
 		if (line == "Bullet")
 		{
 			inFile >> m_bulletConfig.SR >> m_bulletConfig.CR >> m_bulletConfig.S >> m_bulletConfig.FR >> m_bulletConfig.FG >> m_bulletConfig.FB >>
-				m_bulletConfig.OR >> m_bulletConfig.OG >> m_bulletConfig.OB >> m_bulletConfig.OT >> m_bulletConfig.V >> m_bulletConfig.L;
+				m_bulletConfig.OR >> m_bulletConfig.OG >> m_bulletConfig.OB >> m_bulletConfig.OT >> m_bulletConfig.V >> m_bulletConfig.L >> m_bulletConfig.SI;
 		}
 	}
 
@@ -90,6 +90,7 @@ void Game::run()
 			sMovement();
 			sCollision();
 			sUserInput();
+			sSpecialWeapon();
 			sLifeSpan();
 			sRender();
 
@@ -202,7 +203,7 @@ void Game::spawnSmallEnemies(std::shared_ptr<Entity> e)
 	constexpr float radianUnit{ static_cast<float>(0.01745329) };
 	const size_t vertices{ e->cShape->circle.getPointCount() };
 	const float speed{ e->cTransform->velocity.len() };
-	const float fixedInterval( 360 / vertices * 1.0f );
+	const float fixedInterval( 360.0f / static_cast<float>(vertices) );
 	const float degreeToRadian(fixedInterval * radianUnit);
 
 	for (int i = 0; i < vertices; i++)
@@ -251,11 +252,40 @@ void Game::spawnBullet(std::shared_ptr<Entity> entity, const Vec2& mousePos)
 	//Give this entity a lifespan with configuration
 	e->cLifespan = std::make_shared<CLifespan>(m_bulletConfig.L);
 
+	//record when the most recent bullet was spawned
+	m_lastBulletFireTime = m_currentFrame;
+
 }
 
 void Game::spawnSpecialWeapon(std::shared_ptr<Entity> entity)
 {
 	//TODO: implement your own special weapon
+	
+	//Player vertices number of bullet will fired and they travel outward at angles at a fixed interval equal to 45 degree.
+	//These bullet can bounce the window but after specific amounts of bounce they will disappear with a lifespan.
+
+	//Velocity arithmetic
+	constexpr float radianUnit{ static_cast<float>(0.01745329) };
+	const size_t vertices{ m_player->cShape->circle.getPointCount() };
+	const float speed{ m_bulletConfig.S };
+	const float fixedInterval(360.0f / static_cast<float>(vertices));
+	const float degreeToRadian(fixedInterval * radianUnit);
+
+	for (size_t i = 0; i < vertices; i++)
+	{
+		auto entity = m_entities.addEntity("special_bullet");
+
+		Vec2 velocity{ speed * std::cosf(degreeToRadian * (i * 1.0f)), speed * std::sinf(degreeToRadian * (i * 1.0f)) };
+
+		entity->cTransform = std::make_shared<CTransform>(m_player->cTransform->pos, velocity, 0.0f);
+
+		entity->cShape = std::make_shared<CShape>(static_cast<float>(m_bulletConfig.SR), vertices,sf::Color::Red, sf::Color::White, static_cast<float>(m_bulletConfig.OT));
+		
+		entity->cBounce = std::make_shared<CBounce>(m_specialTotalBounce);
+	}
+
+	//record when the most recent special was fired
+	m_lastSpecialFireTime = m_currentFrame;
 }
 
 void Game::sMovement()
@@ -366,6 +396,31 @@ void Game::sCollision()
 		}
 	}
 
+	//Collision between special bullet and enemy
+	for (auto& b : m_entities.getEntities("special_bullet"))
+	{
+		for (auto& e : m_entities.getEntities("enemy"))
+		{
+			if ((b->cTransform->pos.dist(e->cTransform->pos)) <= (m_enemyConfig.CR + m_bulletConfig.CR))
+			{
+				m_score += e->cScore->score;
+				spawnSmallEnemies(e);
+				b->destroy();
+				e->destroy();
+			}
+		}
+
+		for (auto& s_e : m_entities.getEntities("small_enemy"))
+		{
+			if ((b->cTransform->pos.dist(s_e->cTransform->pos)) <= (m_enemyConfig.CR + m_bulletConfig.CR))
+			{
+				m_score += s_e->cScore->score;
+				b->destroy();
+				s_e->destroy();
+			}
+		}
+	}
+
 	//Collision between enemy and player
 	for (auto& e : m_entities.getEntities("enemy"))
 	{
@@ -415,23 +470,52 @@ void Game::sCollision()
 			if (e->cTransform->pos.x - e->cShape->circle.getRadius() < 0)
 			{
 				e->cTransform->velocity.x = e->cTransform->velocity.x * -1.0f;
+				if (e->tag() == "special_bullet") 
+				{ 
+					e->cBounce->remaining -= 1; 
+				}
 			}
 			if (e->cTransform->pos.y - e->cShape->circle.getRadius() < 0)
 			{
 				e->cTransform->velocity.y = e->cTransform->velocity.y * -1.0f;
+				if (e->tag() == "special_bullet") { e->cBounce->remaining -= 1; }
+
 			}
 			if (e->cTransform->pos.x + e->cShape->circle.getRadius() >= m_window.getSize().x)
 			{
 				e->cTransform->velocity.x = e->cTransform->velocity.x * -1.0f;
+				if (e->tag() == "special_bullet") { e->cBounce->remaining -= 1; }
+
 			}
 			if (e->cTransform->pos.y + e->cShape->circle.getRadius() >= m_window.getSize().y)
 			{
 				e->cTransform->velocity.y = e->cTransform->velocity.y * -1.0f;
+				if (e->tag() == "special_bullet") { e->cBounce->remaining -= 1; }
+
 			}
+
 		}
 	}
 
 
+}
+
+void Game::sSpecialWeapon()
+{
+	for (auto& e : m_entities.getEntities("special_bullet"))
+	{
+		if (e->cBounce->remaining <= 0)
+		{
+			if (!(e->cLifespan))
+			{
+				e->cLifespan = std::make_shared<CLifespan>(m_bulletConfig.L);
+			}
+			else
+			{
+				break;
+			}
+		}
+	}
 }
 
 void Game::sEnemySpawner()
@@ -465,6 +549,8 @@ void Game::sRender()
 	// 
 	m_window.clear();
 
+	m_window.draw(m_text);
+
 	for (auto& e : m_entities.getEntities())
 	{
 		//set the position of the shape based on the entity's transform->pos
@@ -477,8 +563,6 @@ void Game::sRender()
 		//draw the entity's sf::CircleShape
 		m_window.draw(e->cShape->circle);
 	}
-
-	m_window.draw(m_text);
 
 	m_window.display();
 }
@@ -564,18 +648,36 @@ void Game::sUserInput()
 
 		if (event.type == sf::Event::MouseButtonPressed)
 		{
-			if (event.mouseButton.button == sf::Mouse::Left)
+			if (!(m_paused))
 			{
-				//call spawnBullet here
-				if (!(m_paused))
+				if (event.mouseButton.button == sf::Mouse::Left)
 				{
-					spawnBullet(m_player, Vec2(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y)));
-				}
-			}
+					if (m_firstTimeBulletFired)
+					{
+						m_firstTimeBulletFired = false;
+						m_lastBulletFireTime = m_currentFrame - m_bulletConfig.SI;
 
-			if (event.mouseButton.button == sf::Mouse::Right)
-			{
-				//call spawnSpecialWeapon here
+					}
+					if (m_currentFrame - m_lastBulletFireTime >= m_bulletConfig.SI)
+					{
+						//call spawnBullet here
+						spawnBullet(m_player, Vec2(static_cast<float>(event.mouseButton.x), static_cast<float>(event.mouseButton.y)));
+					}
+				}
+
+				if (event.mouseButton.button == sf::Mouse::Right)
+				{
+					if (m_firstTimeSpecialFired)
+					{
+						m_firstTimeSpecialFired = false;
+						m_lastSpecialFireTime = m_currentFrame - m_specialWeaponSI;
+					}
+					if (m_currentFrame - m_lastSpecialFireTime >= m_specialWeaponSI)
+					{
+						//call spawnSpecialWeapon here
+						spawnSpecialWeapon(m_player);
+					}
+				}
 			}
 		}
 	}
