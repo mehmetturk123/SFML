@@ -1,3 +1,3 @@
 # SFML
-+ This repository contains five types of assignments, all of which are based on the SFML library.
-+ All assignments represented by their own branch.
+This is an attempt to build game engine from scratch with ECS system.
+This branch is assignment 2 from "COMP4300 - C++ Game Programming by Dave Churchill"
